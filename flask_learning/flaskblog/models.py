@@ -24,7 +24,7 @@ class User(db.Model,UserMixin):
 class Post(db.Model):
     id= db.Column(db.Integer,primary_key=True)
     title=db.Column(db.String(150),nullable=False)
-    date_posted=db.Column(db.DateTime,nullable=False,default=datetime.now(timezone.utc)) # Not the () since we don't want the (executed) time right now
+    date_posted=db.Column(db.DateTime,nullable=False,default=datetime.utcnow) # Not the () since we don't want the (executed) time right now
     content=db.Column(db.Text,nullable=False)
     # The 'User' model will have atomatically set the table name as 'user' same for 'Post'->'post, tb_name can be changed. 
     user_id=db.Column(db.Integer,db.ForeignKey('user.id'),nullable=False)  

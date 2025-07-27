@@ -12,7 +12,8 @@ from numpy.core.defchararray import title
 @app.route("/")
 @app.route("/home")
 def home():
-    posts=Post.query.all()
+    page = request.args.get('page',1,type=int)
+    posts=Post.query.order_by(Post.date_posted.desc()).paginate(per_page=3,page=page)
     return render_template('home.html',posts=posts,title='Home')
 
 @app.route("/about")
@@ -110,7 +111,7 @@ def create_post():
         return redirect(url_for('home'))
 
     return render_template('create_post.html',title='new post',
-                           legend='Update Post',form=form)
+                           legend='Create Post',form=form)
 
 @app.route("/post/<int:post_id>",methods=["GET","POST"])
 def post(post_id):
@@ -147,3 +148,12 @@ def delete_post(post_id):
     db.session.commit()
     flash(f'Your Post has been deleted!', 'dark')
     return redirect(url_for('home'))
+
+@app.route("/user/<string:username>")
+def user_page(username):
+    page = request.args.get('page',1,type=int)
+    user=User.query.filter_by(username=username).first_or_404()
+    posts=Post.query.filter_by(author=user)\
+        .order_by(Post.date_posted.desc())\
+        .paginate(per_page=3,page=page)
+    return render_template('user_posts.html',user=user,posts=posts,title='User')

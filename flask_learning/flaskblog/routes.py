@@ -2,10 +2,12 @@ import os
 import secrets
 from PIL import Image
 from flask import render_template, url_for, flash, redirect, request, abort
-from flaskblog import app,bcrypt,db,login_manager
+from flaskblog import app,bcrypt,db,login_manager,mail
 from flask_login import login_user,logout_user,current_user,login_required
 from flaskblog.models import User,Post
-from flaskblog.forms import RegistrationForm, LoginForm,Updateinfo,PostForm
+from flaskblog.forms import (RegistrationForm, LoginForm,Updateinfo,PostForm,Request_ResetForm,Pswd_ResetForm)
+from flask_mail import Message
+
 from numpy.core.defchararray import title
 
 
@@ -29,12 +31,12 @@ def login():
         user = User.query.filter_by(email=form.email.data).first()
         if user and bcrypt.check_password_hash(user.password,form.password.data):
             login_user(user,remember=form.remember.data)
-            next_page= request.args.get('next') #args-> dict, hence better to accessed with get() then [k,v]; Will return None or a key 
-            print(next_page) 
-            flash(f'Login Successful! Welcome {user.username }',category='success') 
-            # if the user accesses the account page through URL it will redirect it to the 'account' 
+            next_page= request.args.get('next') #args-> dict, hence better to accessed with get() then [k,v]; Will return None or a key
+            print(next_page)
+            flash(f'Login Successful! Welcome {user.username }',category='success')
+            # if the user accesses the account page through URL it will redirect it to the 'account'
             # and if through normal login it will redirect it to the home page.
-            return redirect(next_page) if next_page else redirect(url_for('home')) 
+            return redirect(next_page) if next_page else redirect(url_for('home'))
         else:
             flash(f'Login Unsuccessful, please check your Email and Password',category='danger')
     return render_template('login.html',title='Login',form=form)
@@ -157,3 +159,48 @@ def user_page(username):
         .order_by(Post.date_posted.desc())\
         .paginate(per_page=3,page=page)
     return render_template('user_posts.html',user=user,posts=posts,title='User')
+
+
+def send_reset_email(user):
+    token = user.get_reset_token()
+    msg = Message('Password Reset Request', recipients=[user.email])
+    msg.body = f''' To Reset Your Email, Visit The Following Link:
+    {url_for('reset_token', token=token, _external=True)}
+
+
+    If You Did Not Make This Request Don't Do Anything Nothing Will Happen. 
+    '''
+    mail.send(msg)
+
+
+@app.route("/reset_password", methods=["GET", "POST"])
+def reset_password():
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+    form = Request_ResetForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        send_reset_email(user)
+        flash('An email is been sent with Instructions!', 'info')
+        return redirect(url_for('login'))
+    return render_template('reset_password.html', title='Reset Password Request', form=form)
+
+
+@app.route("/reset_password/<token>", methods=["GET", "POST"])
+def reset_token(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('home'))
+    print(f"Token received: {token}")
+    user = User.verify_reset_token(token)
+    print(f"User from token: {user}")
+    if user is None:
+        flash('This is a Invalid or Expired Token', 'warning')
+        return redirect(url_for('reset_password'))
+    form = Pswd_ResetForm()
+    if form.validate_on_submit():
+        hashed_pw = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
+        user.password = hashed_pw  # No need to find or add since we did that up also we only need to update.
+        db.session.commit()
+        flash(f'Password Updated For {user.username}! You can now Log in', category='success')
+        return redirect(url_for('login'))
+    return render_template('change_password.html', title='Reset Password', form=form)
